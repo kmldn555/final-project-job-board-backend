@@ -190,6 +190,8 @@ model JobPosting {
   preSelectionTest PreSelectionTest?
   applications     JobApplication[]
   saveJobs         SaveJob[]
+
+  @@map("job_postings")
 }
 
 model PreSelectionTest {
@@ -200,6 +202,8 @@ model PreSelectionTest {
 
   jobPosting JobPosting        @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
   questions  PreTestQuestion[]
+
+  @@map("preselection_tests")
 }
 
 model PreTestQuestion {
@@ -215,6 +219,8 @@ model PreTestQuestion {
 
   test    PreSelectionTest @relation(fields: [testId], references: [id], onDelete: Cascade)
   answers PreTestAnswer[]
+
+  @@map("pretest_questions")
 }
 
 // Tabel ini menjembatani Feature 1 (Apply Job) dan Feature 2 (Applicant Management & Pre-Test)
@@ -235,6 +241,8 @@ model JobApplication {
   jobPosting  JobPosting          @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
   testAnswers PreTestAnswer[]
   interviews  InterviewSchedule[]
+
+  @@map("job_applications")
 }
 
 model PreTestAnswer {
@@ -246,6 +254,8 @@ model PreTestAnswer {
   preTestQuestionId BigInt?
   jobApplication    JobApplication?  @relation(fields: [jobApplicationId], references: [id])
   jobApplicationId  BigInt?
+
+  @@map("pretest_answers")
 }
 
 model InterviewSchedule {
@@ -259,6 +269,8 @@ model InterviewSchedule {
   updatedAt        DateTime        @updatedAt
   jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id])
   jobApplicationId BigInt?
+
+  @@map("interview_schedules")
 }
 
 //feature 3
