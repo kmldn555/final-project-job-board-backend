@@ -219,10 +219,11 @@ model JobApplication {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobPosting  JobPosting          @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
-  testAnswers PreTestAnswer[]
-  interviews  InterviewSchedule[]
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobPosting     JobPosting          @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+  testAnswers    PreTestAnswer[]
+  interviews     InterviewSchedule[]
+  companyReviews CompanyReview[]
 
   @@map("job_applications")
 }
@@ -259,18 +260,18 @@ model InterviewSchedule {
 model Payment {
   id               BigInt        @id @default(autoincrement())
   subscriptionId   BigInt
-  approvedBy       BigInt
+  approvedBy       BigInt?
   amount           Int
   method           MethodPayment
-  status           PaymentStatus
+  status           PaymentStatus @default(PENDING)
   paymentProofUrl  String?
-  gatewayReference String?
+  gatewayReference String?       @unique
   createdAt        DateTime      @default(now())
   expiredAt        DateTime
   approvedAt       DateTime?
   proofUploadedAt  DateTime?
 
-  user         User         @relation(fields: [approvedBy], references: [id])
+  approver     User?        @relation("PaymentApprover", fields: [approvedBy], references: [id])
   subscription Subscription @relation(fields: [subscriptionId], references: [id])
 
   @@map("payments")
@@ -292,9 +293,9 @@ model Subscription {
   id        BigInt             @id @default(autoincrement())
   userId    BigInt
   planId    BigInt
-  startDate DateTime
-  endDate   DateTime
-  status    SubscriptionStatus
+  startDate DateTime?
+  endDate   DateTime?
+  status    SubscriptionStatus @default(PENDING)
   payments  Payment[]
 
   user User             @relation(fields: [userId], references: [id])
@@ -304,6 +305,7 @@ model Subscription {
 }
 
 enum SubscriptionStatus {
+  PENDING
   ACTIVE
   INACTIVE
   EXPIRED
@@ -313,6 +315,7 @@ model SubscriptionPlan {
   id                        BigInt         @id @default(autoincrement())
   name                      String         @unique
   price                     Int
+  durationInDays            Int            @default(30)
   cvGenerator               Boolean        @default(false)
   priorityReview            Boolean        @default(false)
   skillAssessmentLimitation Int            @default(0)
@@ -336,22 +339,26 @@ model CvDocument {
 }
 
 model CompanyReview {
-  id               BigInt   @id @default(autoincrement())
-  companyId        BigInt
-  userId           BigInt
-  jobPosition      String
-  salaryEstimation Int
-  ratingCulture    Int
-  ratingWorkLife   Int
-  ratingCareer     Int
-  comments         String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                  BigInt   @id @default(autoincrement())
+  companyId           BigInt
+  userId              BigInt
+  jobaApplicationId   BigInt?
+  jobTitle            String
+  salaryEstimation    Int
+  ratingCulture       Int
+  ratingWorkLife      Int
+  ratingFacilities    Int
+  ratingCareer        Int
+  reviewForCompany    String?
+  adviceForManagement String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   user    User    @relation(fields: [userId], references: [id])
   // relation ke company table bisa ditambahkan jika ada model Company
   company Company @relation(fields: [companyId], references: [id])
 
+  @@unique([companyId, userId])
   @@map("company_reviews")
 }
 
@@ -377,86 +384,111 @@ enum VerificationStatus {
 }
 
 model Assessment {
-  id           BigInt  @id @default(autoincrement())
-  createdBy    BigInt
+  id           BigInt           @id @default(autoincrement())
   title        String
-  skillName    String?
-  passingScore Int?
-  duration     Int     @default(30) // in minutes
+  description  String?
+  skillName    String
+  badgeName    String
+  badgeIconUrl String
+  status       AssessmentStatus @default(DRAFT)
+  createdById  BigInt
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
-  user                User                 @relation(fields: [createdBy], references: [id])
+  createdBy           User                 @relation(fields: [createdById], references: [id])
+  assessmentAttempts  AssessmentAttempt[]
   assessmentQuestions AssessmentQuestion[]
-  userAssessments     UserAssessment[]
+  certificates        Certificate[]
 
   @@map("assessments")
 }
 
-model AssessmentQuestion {
-  id             BigInt @id @default(autoincrement())
-  assessmentId   BigInt
-  questionNumber Int
-  questionText   String
-  optionA        String
-  optionB        String
-  optionC        String
-  optionD        String
-  correctOption  String
+enum AssessmentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
 
-  assessment Assessment @relation(fields: [assessmentId], references: [id])
+model AssessmentAttempt {
+  id           BigInt                  @id @default(autoincrement())
+  userId       BigInt
+  assessmentId BigInt
+  status       AssessmentAttemptStatus @default(IN_PROGRESS)
+  startedAt    DateTime                @default(now())
+  expiresAt    DateTime
+  submittedAt  DateTime?
+  score        Int?
+  isPassed     Boolean?
+
+  user              User               @relation(fields: [userId], references: [id])
+  assessment        Assessment         @relation(fields: [assessmentId], references: [id])
+  assessmentAnswers AssessmentAnswer[]
+  certificate       Certificate?
+
+  @@map("assessment_attempts")
+}
+
+enum AssessmentAttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+}
+
+model AssessmentQuestion {
+  id           BigInt    @id @default(autoincrement())
+  assessmentId BigInt
+  questionText String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  assessment        Assessment         @relation(fields: [assessmentId], references: [id])
+  assessmentOptions AssessmentOption[]
+  assessmentAnswers AssessmentAnswer[]
 
   @@map("assessment_questions")
 }
 
-model UserAssessment {
-  id           BigInt    @id @default(autoincrement())
-  userId       BigInt
-  assessmentId BigInt
-  score        Int
-  startedAt    DateTime  @default(now())
-  completedAt  DateTime?
+model AssessmentOption {
+  id         BigInt    @id @default(autoincrement())
+  questionId BigInt
+  optionText String
+  isCorrect  Boolean
+  deletedAt  DateTime?
 
-  user         User          @relation(fields: [userId], references: [id])
-  assessment   Assessment    @relation(fields: [assessmentId], references: [id])
-  certificates Certificate[]
-  userBadges   UserBadge[]
+  question          AssessmentQuestion @relation(fields: [questionId], references: [id])
+  assessmentAnswers AssessmentAnswer[]
 
-  @@map("user_assessments")
+  @@map("assessment_options")
+}
+
+model AssessmentAnswer {
+  id               BigInt @id @default(autoincrement())
+  attemptId        BigInt
+  questionId       BigInt
+  selectedOptionId BigInt
+
+  attempt        AssessmentAttempt  @relation(fields: [attemptId], references: [id])
+  question       AssessmentQuestion @relation(fields: [questionId], references: [id])
+  selectedOption AssessmentOption   @relation(fields: [selectedOptionId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@map("assessment_answers")
 }
 
 model Certificate {
-  id                BigInt   @id @default(autoincrement())
-  userAssessmentId  BigInt
-  certificateNumber Int      @unique
-  certificateUrl    String
-  issuedAt          DateTime @default(now())
+  id              BigInt   @id @default(autoincrement())
+  certificateCode String   @unique
+  attemptId       BigInt   @unique
+  userId          BigInt
+  assessmentId    BigInt
+  recipientName   String
+  certificateUrl  String
+  issuedAt        DateTime @default(now())
 
-  userAssessment UserAssessment @relation(fields: [userAssessmentId], references: [id])
+  user       User              @relation(fields: [userId], references: [id])
+  assessment Assessment        @relation(fields: [assessmentId], references: [id])
+  attempt    AssessmentAttempt @relation(fields: [attemptId], references: [id])
 
+  @@unique([userId, assessmentId])
   @@map("certificates")
-}
-
-model UserBadge {
-  id               BigInt   @id @default(autoincrement())
-  userId           BigInt
-  badgeId          BigInt
-  userAssessmentId BigInt?
-  earnedAt         DateTime @default(now())
-
-  user           User            @relation(fields: [userId], references: [id])
-  badge          Badge           @relation(fields: [badgeId], references: [id])
-  userAssessment UserAssessment? @relation(fields: [userAssessmentId], references: [id])
-
-  @@map("user_badges")
-}
-
-model Badge {
-  id          BigInt      @id @default(autoincrement())
-  name        String      @unique
-  description String?
-  iconUrl     String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  userBadges  UserBadge[]
-
-  @@map("badges")
 }
