@@ -31,26 +31,27 @@ enum Gender {
   FEMALE
 }
 
-enum Provider {
-  GOOGLE
-  FACEBOOK
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
 }
 
 model User {
-  id                    BigInt                 @id @default(autoincrement())
-  name                  String
-  role                  RoleUser               @default(USER)
-  email                 String                 @unique
-  password              String
-  isEmailVerified       Boolean                @default(false)
-  phone                 String
-  status                StatusUser             @default(ACTIVE)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  deletedAt             DateTime?
-  socialAcounts         SocialAcount[]
-  emailVerifications    EmailVerification[]
-  passwordResets        PasswordReset[]
+  id              BigInt     @id @default(autoincrement())
+  fullName        String?
+  role            RoleUser   @default(USER)
+  email           String     @unique
+  password        String?
+  isEmailVerified Boolean    @default(false)
+  phone           String?
+  profilePic      String?
+  status          StatusUser @default(ACTIVE)
+  googleId        String?    @unique
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  userTokens            UserToken[]
   saveJobs              SaveJob[]
   userProfile           UserProfile?
   jobApplications       JobApplication[]
@@ -62,85 +63,66 @@ model User {
   assessments           Assessment[]
   userAssessments       UserAssessment[]
   userBadges            UserBadge[]
+  company               Company?
 
-  @@map("users") // rename table di database
-}
-
-model SocialAcount {
-  id             BigInt   @id @default(autoincrement())
-  userId         BigInt
-  provider       String
-  providerUserId BigInt
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@unique([provider, providerUserId])
-  @@map("social_acounts")
+  @@map("users")
 }
 
 model UserProfile {
-  userId         BigInt   @id
-  fullName       String
-  birthPlace     String
-  birthDate      DateTime
-  gender         Gender
-  educationLevel String
-  address        String
-  city           String
-  latitude       Decimal
-  longitude      Decimal
-  profilePic     String?
-  expectedSalary Decimal
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id])
+  userId         BigInt    @id
+  birthPlace     String?
+  birthDate      DateTime? @db.Date
+  gender         Gender?
+  educationLevel String?
+  address        String?
+  city           String?
+  latitude       Decimal?  @db.Decimal(10, 7)
+  longitude      Decimal?  @db.Decimal(10, 7)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_profiles")
 }
 
-model EmailVerification {
-  id         BigInt    @id @default(autoincrement())
-  userId     BigInt
-  token      String    @unique
-  expiresAt  DateTime
-  verifiedAt DateTime?
-  createdAt  DateTime  @default(now())
-  user       User      @relation(fields: [userId], references: [id])
-
-  @@map("email_verifications")
-}
-
-model PasswordReset {
+model UserToken {
   id        BigInt    @id @default(autoincrement())
   userId    BigInt
-  token     String    @unique
+  tokenHash String    @unique
+  type      TokenType
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
-  user      User      @relation(fields: [userId], references: [id])
 
-  @@map("password_resets")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("user_tokens")
 }
 
 model Company {
-  id          BigInt       @id @default(autoincrement())
+  id          BigInt    @id @default(autoincrement())
+  adminId     BigInt    @unique
   name        String
-  slug        String       @unique
+  slug        String    @unique
   phone       String
   email       String
-  logo        String
-  description String
-  industry    String
-  city        String
-  latitude    Decimal?
-  longitude   Decimal?
-  website     String
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  logo        String?
+  description String?
+  industry    String?
+  city        String?
+  latitude    Decimal?  @db.Decimal(10, 7)
+  longitude   Decimal?  @db.Decimal(10, 7)
+  website     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
-  jobPostings JobPosting[]
+
+  admin                 User                   @relation(fields: [adminId], references: [id])
+  jobPostings           JobPosting[]
+  companyReviews        CompanyReview[]
+  employeeVerifications EmployeeVerification[]
 
   @@map("companies")
 }
@@ -149,8 +131,8 @@ model SaveJob {
   userId  BigInt
   jobId   BigInt
   savedAt DateTime   @default(now())
-  user    User       @relation(fields: [userId], references: [id])
-  job     JobPosting @relation(fields: [jobId], references: [id])
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job     JobPosting @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@id([userId, jobId])
   @@map("save_jobs")
@@ -366,8 +348,9 @@ model CompanyReview {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
   // relation ke company table bisa ditambahkan jika ada model Company
+  company Company @relation(fields: [companyId], references: [id])
 
   @@map("company_reviews")
 }
@@ -380,8 +363,9 @@ model EmployeeVerification {
   status      VerificationStatus
   verifiedAt  DateTime?
 
-  user User @relation(fields: [userId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
   // relation ke company table bisa ditambahkan jika ada model Company
+  company Company @relation(fields: [companyId], references: [id])
 
   @@map("employee_verifications")
 }
