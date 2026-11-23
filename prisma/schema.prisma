@@ -51,19 +51,20 @@ model User {
   updatedAt       DateTime   @updatedAt
   deletedAt       DateTime?
 
-  userTokens            UserToken[]
-  saveJobs              SaveJob[]
-  userProfile           UserProfile?
-  jobApplications       JobApplication[]
-  payments              Payment[]
-  subscriptions         Subscription[]
-  cvDocuments           CvDocument[]
-  companyReviews        CompanyReview[]
-  employeeVerifications EmployeeVerification[]
-  assessments           Assessment[]
-  userAssessments       UserAssessment[]
-  userBadges            UserBadge[]
-  company               Company?
+  userTokens      UserToken[]
+  saveJobs        SaveJob[]
+  userProfile     UserProfile?
+  jobApplications JobApplication[]
+  payments        Payment[]
+  subscriptions   Subscription[]
+  cvDocuments     CvDocument[]
+  companyReviews  CompanyReview[]
+
+  assessments        Assessment[]
+  company            Company?
+  approvedPayments   Payment[]           @relation("PaymentApprover")
+  assessmentAttempts AssessmentAttempt[]
+  certificates       Certificate[]
 
   @@map("users")
 }
@@ -119,10 +120,9 @@ model Company {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  admin                 User                   @relation(fields: [adminId], references: [id])
-  jobPostings           JobPosting[]
-  companyReviews        CompanyReview[]
-  employeeVerifications EmployeeVerification[]
+  admin          User            @relation(fields: [adminId], references: [id])
+  jobPostings    JobPosting[]
+  companyReviews CompanyReview[]
 
   @@map("companies")
 }
@@ -149,10 +149,10 @@ enum ApplicationStatus {
 }
 
 model JobPosting {
-  id                  BigInt   @id @default(autoincrement())
+  id                  BigInt            @id @default(autoincrement())
   companyId           BigInt
-  title               String
-  description         String   @db.Text
+  jobTitle            String
+  description         String            @db.Text
   bannerUrl           String?
   category            String
   city                String
@@ -163,95 +163,102 @@ model JobPosting {
   salaryMax           Int?
   tags                String[] // Array of strings di PostgreSQL
   deadline            DateTime
-  isPublished         Boolean  @default(false)
-  hasPreSelectionTest Boolean  @default(false)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  company          Company?          @relation(fields: [companyId], references: [id])
-  preSelectionTest PreSelectionTest?
-  applications     JobApplication[]
-  saveJobs         SaveJob[]
+  isPublished         Boolean           @default(false)
+  hasPreSelectionTest Boolean           @default(false)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  //relations
+  company             Company?          @relation(fields: [companyId], references: [id])
+  preSelectionTest    PreSelectionTest?
+  applications        JobApplication[]
+  saveJobs            SaveJob[]
 
   @@map("job_postings")
 }
 
 model PreSelectionTest {
-  id           BigInt   @id @default(autoincrement())
-  jobPostingId BigInt   @unique
-  passingScore Int      @default(70)
-  createdAt    DateTime @default(now())
-
-  jobPosting JobPosting        @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
-  questions  PreTestQuestion[]
+  id           BigInt            @id @default(autoincrement())
+  jobPostingId BigInt            @unique
+  passingScore Int               @default(70)
+  createdAt    DateTime          @default(now())
+  //relations
+  jobPosting   JobPosting        @relation(fields: [jobPostingId], references: [id])
+  questions    PreTestQuestion[]
 
   @@map("preselection_tests")
 }
 
 model PreTestQuestion {
-  id             BigInt @id @default(autoincrement())
-  testId         BigInt
-  questionNumber Int // 1 sampai 25
-  questionText   String @db.Text
-  optionA        String
-  optionB        String
-  optionC        String
-  optionD        String
-  correctOption  String // "A", "B", "C", atau "D"
-
-  test    PreSelectionTest @relation(fields: [testId], references: [id], onDelete: Cascade)
-  answers PreTestAnswer[]
+  id           BigInt           @id @default(autoincrement())
+  testId       BigInt
+  questionText String
+  test         PreSelectionTest @relation(fields: [testId], references: [id])
+  answers      PreTestAnswer[]
+  options      PretestOption[]
 
   @@map("pretest_questions")
 }
 
-// Tabel ini menjembatani Feature 1 (Apply Job) dan Feature 2 (Applicant Management & Pre-Test)
+model PretestOption {
+  id                 BigInt          @id @default(autoincrement())
+  pretestQuestionsId BigInt
+  option             String
+  isCorrect          Boolean
+  //relations
+  question           PreTestQuestion @relation(fields: [pretestQuestionsId], references: [id])
+  answers            PreTestAnswer[]
+
+  @@map("pretest_options")
+}
+
 model JobApplication {
-  id              BigInt            @id @default(autoincrement())
+  id              BigInt              @id @default(autoincrement())
   userId          BigInt
   jobPostingId    BigInt
   cvUrl           String
   expectedSalary  Int
-  status          ApplicationStatus @default(PENDING)
-  rejectionReason String?           @db.Text
-  testScore       Int? // Skor dari Pre-Selection Test (0-100)
-  isPriority      Boolean           @default(false) // Diambil dari status Subscription F3
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  status          ApplicationStatus   @default(PENDING)
+  rejectionReason String?             @db.Text
+  testScore       Int?
+  isPriority      Boolean             @default(false)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  //relations
+  user            User                @relation(fields: [userId], references: [id])
+  jobPosting      JobPosting          @relation(fields: [jobPostingId], references: [id])
+  testAnswers     PreTestAnswer[]
+  interviews      InterviewSchedule[]
+  companyReviews  CompanyReview[]
 
-  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobPosting     JobPosting          @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
-  testAnswers    PreTestAnswer[]
-  interviews     InterviewSchedule[]
-  companyReviews CompanyReview[]
-
+  @@unique([userId, jobPostingId])
   @@map("job_applications")
 }
 
 model PreTestAnswer {
-  id                BigInt           @id @default(autoincrement())
-  applicationId     BigInt
-  questionId        BigInt
-  selectedOption    String // "A", "B", "C", atau "D"
-  preTestQuestion   PreTestQuestion? @relation(fields: [preTestQuestionId], references: [id])
-  preTestQuestionId BigInt?
-  jobApplication    JobApplication?  @relation(fields: [jobApplicationId], references: [id])
-  jobApplicationId  BigInt?
+  id            BigInt          @id @default(autoincrement())
+  applicationId BigInt
+  questionId    BigInt
+  optionId      BigInt
+  //relations
+  application   JobApplication  @relation(fields: [applicationId], references: [id])
+  question      PreTestQuestion @relation(fields: [questionId], references: [id])
+  option        PretestOption   @relation(fields: [optionId], references: [id])
 
+  @@unique([applicationId, questionId])
   @@map("pretest_answers")
 }
 
 model InterviewSchedule {
-  id               BigInt          @id @default(autoincrement())
-  applicationId    BigInt
-  scheduledAt      DateTime
-  locationOrLink   String
-  notes            String?         @db.Text
-  reminderSent     Boolean         @default(false) // Flag untuk Cron Job H-1
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  jobApplication   JobApplication? @relation(fields: [jobApplicationId], references: [id])
-  jobApplicationId BigInt?
+  id             BigInt         @id @default(autoincrement())
+  applicationId  BigInt
+  scheduledAt    DateTime
+  locationOrLink String
+  notes          String?        @db.Text
+  isSent         Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  //relations
+  application    JobApplication @relation(fields: [applicationId], references: [id])
 
   @@map("interview_schedules")
 }
@@ -273,6 +280,8 @@ model Payment {
 
   approver     User?        @relation("PaymentApprover", fields: [approvedBy], references: [id])
   subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+  userId       BigInt?
 
   @@map("payments")
 }
@@ -354,33 +363,12 @@ model CompanyReview {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  user    User    @relation(fields: [userId], references: [id])
-  // relation ke company table bisa ditambahkan jika ada model Company
-  company Company @relation(fields: [companyId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
+  company        Company         @relation(fields: [companyId], references: [id])
+  jobApplication JobApplication? @relation(fields: [jobaApplicationId], references: [id])
 
   @@unique([companyId, userId])
   @@map("company_reviews")
-}
-
-model EmployeeVerification {
-  id          BigInt             @id @default(autoincrement())
-  companyId   BigInt
-  userId      BigInt
-  jobPosition String
-  status      VerificationStatus
-  verifiedAt  DateTime?
-
-  user    User    @relation(fields: [userId], references: [id])
-  // relation ke company table bisa ditambahkan jika ada model Company
-  company Company @relation(fields: [companyId], references: [id])
-
-  @@map("employee_verifications")
-}
-
-enum VerificationStatus {
-  PENDING
-  VERIFIED
-  REJECTED
 }
 
 model Assessment {

@@ -28,7 +28,6 @@ coverage/
 .windsurf/skills/
 skills-lock.json
 
-
 # Editor
 .vscode/
 .idea/
@@ -36,8 +35,4 @@ skills-lock.json
 # Operating System
 .DS_Store
 Thumbs.db
-dist
-node_modules
-.env
-/generated/prisma
-docker
+docker/postgres/
